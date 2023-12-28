@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
         hipMemcpy(hostResult, buff, usr_par.size, hipMemcpyDeviceToHost);
         // Print modified data
         printf("READ Data: ");
-        for (int i = 0; i < usr_par.size/sizeof(int); ++i) {
+        for (int i = 0; i < 10; ++i) {
             printf("%d ", hostResult[i]);
         }
             printf("\n");

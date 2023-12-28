@@ -946,6 +946,11 @@ int rdma_exec_task(struct rdma_exec_params *exec_params)
 				sg_list[i].length = (uint32_t)exec_params->local_buf_iovec[start_i + i].iov_len;
 				sg_list[i].lkey   = exec_params->local_buf_mr_lkey;
 				curr_rem_addr += sg_list[i].length;
+                for(int k=0; k<10; k++){
+                    int *temp = (int *)sg_list[i].addr;
+                    printf("%d ", temp[i]);
+                }
+                printf("length %d \n", sg_list[i].length);
 			}
 		
 			DEBUG_LOG_FAST_PATH("RDMA Read/Write: ibv_wr_set_sge_list(qpex=%p, num_sge=%lu, sg_list=%p), start_i=%d, num_sges_to_send=%d, sg[0].length=%u\n",
