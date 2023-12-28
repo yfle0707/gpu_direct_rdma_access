@@ -43,6 +43,7 @@
 #include <getopt.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <hip/hip_runtime.h>
 
 #include "utils.h"
 #include "gpu_mem_util.h"
@@ -434,7 +435,16 @@ int main(int argc, char *argv[])
         if (!usr_par.use_cuda) {
             DEBUG_LOG_FAST_PATH("Written data \"%s\"\n", (char*)buff);
         }
-    }
+        int* hostResult = (int*)malloc(usr_par.size);
+        // Copy result from GPU to host
+        hipMemcpy(hostResult, buff, usr_par.size, hipMemcpyDeviceToHost);
+        // Print modified data
+        printf("READ Data: ");
+        for (int i = 0; i < usr_par.size/sizeof(int); ++i) {
+            printf("%d ", hostResult[i]);
+        }
+            printf("\n");
+        }
     /****************************************************************************************************/
 
     ret_val = print_run_time(start, usr_par.size, usr_par.iters);

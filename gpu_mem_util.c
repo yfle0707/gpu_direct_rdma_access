@@ -304,6 +304,7 @@ void *work_buffer_alloc(size_t length, int use_cuda, const char *bdf)
     return buff;
 }
 
+
 /****************************************************************************************
  * CPU or GPU memory free, according to HAVE_CUDA pre-compile option and use_cuda flag
  ****************************************************************************************/
@@ -312,7 +313,7 @@ void work_buffer_free(void *buff, int use_cuda)
     if (use_cuda) {
 #ifdef HAVE_CUDA
         free_gpu(buff);
-#elif defined(HAVE_AMD)        
+#elif defined(HAVE_AMD)      
     HIPCHECK(hipFree(buff));
 #else
         fprintf(stderr, "Can't free GPU, HAVE_CUDA mode isn't set");

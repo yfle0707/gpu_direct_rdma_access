@@ -54,7 +54,18 @@ struct rdma_device;
  * rdma_buffer is used to represent the rdma parameters of a
  * applciation buffer on a specific device to be used in the RDMA operations
  */
-struct rdma_buffer;
+// struct rdma_buffer;
+
+struct rdma_buffer {
+    /* Buffer Related fields */
+    void               *buf_addr;   //uint64_t  addr;
+    size_t              buf_size;   //uint32_t  size;
+    /* MR Related fields */
+    struct ibv_mr      *mr;
+    uint32_t            rkey;
+    /* Linked rdma_device */
+    struct rdma_device *rdma_dev;
+};
 
 struct rdma_open_dev_attr {
     const char      *ib_devname;

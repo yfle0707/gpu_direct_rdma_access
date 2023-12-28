@@ -44,6 +44,8 @@
 #include <getopt.h>
 #include <arpa/inet.h>
 #include <time.h>
+// #include <iostream>
+
 
 #include "utils.h"
 #include "gpu_mem_util.h"
@@ -261,7 +263,7 @@ int main(int argc, char *argv[])
     
     /* Local memory buffer allocation */
     /* On the server side, we allocate buffer on CPU and not on GPU */
-    void *buff = work_buffer_alloc(usr_par.size, 1 /*use_cuda*/, NULL);
+    void *buff = work_buffer_alloc(usr_par.size, 0 /*use_cuda*/, NULL);
     if (!buff) {
         ret_val = 1;
         goto clean_device;
@@ -275,6 +277,13 @@ int main(int argc, char *argv[])
         ret_val = 1;
         goto clean_mem_buff;
     }
+    int num_elements = usr_par.size / sizeof(int);
+    int *temp_buff = (int *)malloc(usr_par.size);
+    for (int i = 0; i < num_elements; i++)
+    {
+        temp_buff[i] = i;
+    }
+    memcpy(rdma_buff->buf_addr, temp_buff, sizeof(temp_buff));
 
     struct sigaction act;
     act.sa_handler = sigint_handler;
@@ -338,7 +347,8 @@ sock_listen:
                     break;
             }
         }
-        
+
+  
         DEBUG_LOG_FAST_PATH("Received message \"%s\"\n", desc_str);
         memset(&task_attr, 0, sizeof task_attr);
         task_attr.remote_buf_desc_str      = desc_str;

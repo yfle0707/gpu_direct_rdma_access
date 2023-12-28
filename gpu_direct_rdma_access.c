@@ -142,16 +142,7 @@ struct rdma_device {
 #endif /*PRINT_LATENCY*/
 };
 
-struct rdma_buffer {
-    /* Buffer Related fields */
-    void               *buf_addr;   //uint64_t  addr;
-    size_t              buf_size;   //uint32_t  size;
-    /* MR Related fields */
-    struct ibv_mr      *mr;
-    uint32_t            rkey;
-    /* Linked rdma_device */
-    struct rdma_device *rdma_dev;
-};
+
 
 struct rdma_exec_params {
 	struct rdma_device 	*device;
