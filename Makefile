@@ -2,13 +2,20 @@ IDIR = .
 CC = gcc
 ODIR = obj
 
+HIP_PATH ?= $(wildcard /opt/rocm)
+ifeq (,$(HIP_PATH))
+HIP_PATH = ../../..
+endif
+CC = $(HIP_PATH)/bin/hipcc
+
 ifeq ($(USE_CUDA),1)
   CUDAFLAGS = -I/usr/local/cuda-10.1/targets/x86_64-linux/include
   CUDAFLAGS += -I/usr/local/cuda/include
   PRE_CFLAGS1 = -I$(IDIR) $(CUDAFLAGS) -g -DHAVE_CUDA
   LIBS = -Wall -lrdmacm -libverbs -lmlx5 -lcuda
 else
-  PRE_CFLAGS1 = -I$(IDIR) -g
+
+  PRE_CFLAGS1 = -I$(IDIR) $(HIPFLAGS) -g -D__HIP_PLATFORM_AMD__
   LIBS = -Wall -lrdmacm -libverbs -lmlx5
 endif
 
@@ -39,6 +46,7 @@ all : make_odir $(OEXE_CLT) $(OEXE_SRV)
 make_odir: $(ODIR)/
 
 $(OEXE_SRV) : $(patsubst %,$(ODIR)/%,$(OBJS)) $(ODIR)/server.o
+	@echo $(CC)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(OEXE_CLT) : $(patsubst %,$(ODIR)/%,$(OBJS)) $(ODIR)/client.o

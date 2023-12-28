@@ -899,7 +899,7 @@ int rdma_exec_task(struct rdma_exec_params *exec_params)
 	void (*ibv_wr_rdma_rw_post)(struct ibv_qp_ex *qp, uint32_t rkey, uint64_t remote_addr) = (exec_params->flags & RDMA_TASK_ATTR_RDMA_READ) 
 		? ibv_wr_rdma_read // client wants to send data to the server
 		: ibv_wr_rdma_write; // client wants to receive data from the server
-
+    
 	/* RDMA Read/Write for DCI connect, this will create cqe->ts_start */
 	DEBUG_LOG_FAST_PATH("RDMA Read/Write: ibv_wr_start: qpex = %p\n", exec_params->device->qpex);
 	ibv_wr_start(exec_params->device->qpex);

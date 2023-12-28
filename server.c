@@ -261,7 +261,7 @@ int main(int argc, char *argv[])
     
     /* Local memory buffer allocation */
     /* On the server side, we allocate buffer on CPU and not on GPU */
-    void *buff = work_buffer_alloc(usr_par.size, 0 /*use_cuda*/, NULL);
+    void *buff = work_buffer_alloc(usr_par.size, 1 /*use_cuda*/, NULL);
     if (!buff) {
         ret_val = 1;
         goto clean_device;

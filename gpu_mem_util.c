@@ -48,6 +48,25 @@
 #include <arpa/inet.h>
 #include <time.h>
 
+#include <hip/hip_runtime.h>
+// #include <iostream> //cerr
+
+#define HAVE_AMD
+  // std::cout << "Encountered HIP error (" << error << ") at line "            
+    //           << __LINE__ << " in file " << __FILE__ << "\n";                
+
+#define HIPCHECK(cmd)                                                          \
+do {                                                                           \
+  hipError_t error = (cmd);                                                    \
+  if (error != hipSuccess)                                                     \
+  {                                                                            \
+    fprintf(stdout, "Assertion %s failed at %s:%d\n", error, __FILE__, __LINE__);\
+            fprintf(stdout, "Assertion %s failed at %s:%d\n", error, __FILE__, __LINE__);\
+                                                                 \
+    exit(-1);                                                                  \
+  }                                                                            \
+} while (0)
+
 #ifdef HAVE_CUDA
 /* "/usr/local/cuda/include/" is added to build include path in the Makefile */
 #include "cuda.h"
@@ -62,8 +81,10 @@ extern int debug_fast_path;
 #define DEBUG_LOG_FAST_PATH if (debug_fast_path) printf
 #define FDEBUG_LOG if (debug) fprintf
 #define FDEBUG_LOG_FAST_PATH if (debug_fast_path) fprintf
+// #define HAVE_CUDA
 
 #ifdef HAVE_CUDA
+
 #define ASSERT(x)   \
     do {            \
         if (!(x)) { \
@@ -225,6 +246,30 @@ static int free_gpu(void *gpu_buff)
 }
 #endif //HAVE_CUDA
 
+static void *init_amd_gpu(size_t gpu_buf_size, const char *bdf){
+    hipStream_t stream[2];
+    hipError_t err = hipSuccess;
+    int device_id[2];
+    hipDeviceProp_t prop[2];
+
+    device_id[0] = 0;
+    device_id[1] = 1;
+    // gpu_buf_size = 2097152;
+    uint64_t *flag;
+    // HIPCHECK(hipSetDevice(device_id[0]));
+    // HIPCHECK(hipStreamCreateWithFlags(&stream[0], hipStreamNonBlocking));
+    // // HIPCHECK(hipGetDeviceProperties(&prop[0], device_id[0]));
+    // fprintf(stdout, "hipStreamNonBlocking %d %d, %llu\n", hipStreamNonBlocking, prop[0].gcnArch, gpu_buf_size);
+    // fprintf(stdout, " hipDeviceMallocUncached %d, hipDeviceMallocFinegrained %d, result %d \n",hipDeviceMallocUncached,  hipDeviceMallocFinegrained, prop[0].gcnArch / 10 == 94 ? hipDeviceMallocUncached : hipDeviceMallocFinegrained);
+    // HIPCHECK(hipExtMallocWithFlags((void**)&flag, gpu_buf_size, hipDeviceMallocUncached));
+
+    // HIPCHECK(hipMemsetAsync(flag, 0, gpu_buf_size, stream[0]));
+    // HIPCHECK(hipStreamSynchronize(stream[0]));
+    HIPCHECK(hipMalloc((void**)&flag, gpu_buf_size));
+    fprintf(stdout, "allocate GPU Memory with hipMalloc  %llu\n", gpu_buf_size);
+    return flag;
+}
+
 /****************************************************************************************
  * Memory allocation on CPU or GPU according to HAVE_CUDA pre-compile option and use_cuda flag
  * Return value: Allocated buffer pointer (if success), NULL (if error)
@@ -237,6 +282,8 @@ void *work_buffer_alloc(size_t length, int use_cuda, const char *bdf)
         /* Mem allocation on GPU */
 #ifdef HAVE_CUDA
         buff = init_gpu(length, bdf);
+#elif defined(HAVE_AMD)        
+    buff = init_amd_gpu(length, bdf);
 #else
         fprintf(stderr, "Can't init GPU, HAVE_CUDA mode isn't set");
 #endif //HAVE_CUDA
@@ -265,6 +312,8 @@ void work_buffer_free(void *buff, int use_cuda)
     if (use_cuda) {
 #ifdef HAVE_CUDA
         free_gpu(buff);
+#elif defined(HAVE_AMD)        
+    HIPCHECK(hipFree(buff));
 #else
         fprintf(stderr, "Can't free GPU, HAVE_CUDA mode isn't set");
 #endif //HAVE_CUDA
