@@ -44,43 +44,54 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-
 #include "utils.h"
 #include "gpu_mem_util.h"
 #include "gpu_direct_rdma_access.h"
 
-
 extern int debug;
 extern int debug_fast_path;
 
-#define DEBUG_LOG if (debug) printf
-#define DEBUG_LOG_FAST_PATH if (debug_fast_path) printf
-#define FDEBUG_LOG if (debug) fprintf
-#define FDEBUG_LOG_FAST_PATH if (debug_fast_path) fprintf
+#define DEBUG_LOG \
+    if (debug)    \
+    printf
+#define DEBUG_LOG_FAST_PATH \
+    if (debug_fast_path)    \
+    printf
+#define FDEBUG_LOG \
+    if (debug)     \
+    fprintf
+#define FDEBUG_LOG_FAST_PATH \
+    if (debug_fast_path)     \
+    fprintf
 
 #define ACK_MSG "rdma_task completed"
 
-struct user_params {
+struct user_params
+{
 
-    uint32_t  		    task;
-    int                     port;
-    unsigned long           size;
-    int                     iters;
-    int                     use_cuda;
-    char                   *bdf;
-    char                   *servername;
-    struct sockaddr         hostaddr;
+    uint32_t task;
+    int port;
+    unsigned long size;
+    int iters;
+    int use_cuda;
+    char *bdf;
+    char *servername;
+    struct sockaddr hostaddr;
 };
 
 // CUDA kernel to modify data
-__global__ void modifyData(int* data, int index) {
-    // int tid = threadIdx.x + blockIdx.x * blockDim.x;
+__global__ void modifyData(int *data, int index, bool reset)
+{
     size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if(idx < index)
-        printf("index tid %d, value %d\n", idx, data[idx]);
+    if(reset){
+        data[idx] = 0;
+    }
+    if (idx < index)
+        printf("tid %d, value %d\n", idx, data[idx]);
 }
 
-__global__ void hipKernel() {
+__global__ void hipKernel()
+{
     printf("Hello from HIP kernel!\n");
 }
 /****************************************************************************************
@@ -89,32 +100,34 @@ __global__ void hipKernel() {
  * Return value: socket fd - success, -1 - error
  ****************************************************************************************/
 static int open_client_socket(const char *servername,
-                              int         port)
+                              int port)
 {
     struct addrinfo *res,
-                    *t;
+        *t;
     struct addrinfo hints = {
-        .ai_family   = AF_UNSPEC,
-        .ai_socktype = SOCK_STREAM
-    };
-    char   *service;
-    int     ret_val;
-    int     sockfd;
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM};
+    char *service;
+    int ret_val;
+    int sockfd;
 
     if (asprintf(&service, "%d", port) < 0)
         return -1;
 
     ret_val = getaddrinfo(servername, service, &hints, &res);
 
-    if (ret_val < 0) {
+    if (ret_val < 0)
+    {
         fprintf(stderr, "FAILURE: %s for %s:%d\n", gai_strerror(ret_val), servername, port);
         free(service);
         return -1;
     }
 
-    for (t = res; t; t = t->ai_next) {
+    for (t = res; t; t = t->ai_next)
+    {
         sockfd = socket(t->ai_family, t->ai_socktype, t->ai_protocol);
-        if (sockfd >= 0) {
+        if (sockfd >= 0)
+        {
             if (!connect(sockfd, t->ai_addr, t->ai_addrlen))
                 break;
             close(sockfd);
@@ -125,7 +138,8 @@ static int open_client_socket(const char *servername,
     freeaddrinfo(res);
     free(service);
 
-    if (sockfd < 0) {
+    if (sockfd < 0)
+    {
         fprintf(stderr, "FAILURE: Couldn't connect to %s:%d\n", servername, port);
         return -1;
     }
@@ -133,11 +147,16 @@ static int open_client_socket(const char *servername,
     return sockfd;
 }
 
-enum payload_t { RDMA_BUF_DESC, TASK_ATTRS };
+enum payload_t
+{
+    RDMA_BUF_DESC,
+    TASK_ATTRS
+};
 
-struct payload_attr {
-	enum payload_t data_t;
-	char *payload_str;
+struct payload_attr
+{
+    enum payload_t data_t;
+    char *payload_str;
 };
 
 /************************************************************************************
@@ -146,20 +165,21 @@ struct payload_attr {
  * 		uint8_t payload_t - type of the payload data
  *  	uint16_t payload_size - strlen of the payload_str
  *  	char * payload_str - payload to pack
- * 
+ *
  * returns: an integer equal to the size of the copied into package data in bytes
  * _________________________________________________________________________________
- * 
- *            PACKAGE = {|type|size|---------payload----------|}                             
- *                         1b   2b    (size * sizeof(char))b 
- * 
+ *
+ *            PACKAGE = {|type|size|---------payload----------|}
+ *                         1b   2b    (size * sizeof(char))b
+ *
  ***********************************************************************************/
 int pack_payload_data(void *package, size_t package_size, struct payload_attr *attr)
 {
     uint8_t data_t = attr->data_t;
     uint16_t payload_size = strlen(attr->payload_str) + 1;
-    size_t req_size = sizeof(data_t) + sizeof(payload_size) + payload_size * sizeof(char) ;
-    if (req_size > package_size) {
+    size_t req_size = sizeof(data_t) + sizeof(payload_size) + payload_size * sizeof(char);
+    if (req_size > package_size)
+    {
         fprintf(stderr, "package size (%lu) is less than required (%lu) for sending payload with attributes\n",
                 package_size, req_size);
         return 0;
@@ -187,28 +207,31 @@ int pack_payload_data(void *package, size_t package_size, struct payload_attr *a
  ************************************************************************************/
 int rdma_task_attr_flags_get_desc_str(uint32_t flags, char *desc_str, size_t desc_length)
 {
-    if (desc_length < RDMA_TASK_ATTR_DESC_STRING_LENGTH) {
+    if (desc_length < RDMA_TASK_ATTR_DESC_STRING_LENGTH)
+    {
         fprintf(stderr, "desc string size (%lu) is less than required (%lu) for sending rdma_task_attr_flags data\n",
                 desc_length, RDMA_TASK_ATTR_DESC_STRING_LENGTH);
         return 0;
     }
-   
+
     sprintf(desc_str, "%08x", flags);
-    
+
     return strlen(desc_str) + 1; /*including the terminating null character*/
 }
-#define CLEAN_PACKAGE_DATA  \
-do{                                     \
-    free(package);                      \
-    rdma_buffer_dereg(rdma_buff);       \
-    work_buffer_free(buff, usr_par.use_cuda);\
-    rdma_close_device(rdma_dev);        \
-    close(sockfd);                      \
-    if (usr_par.bdf) {                  \
-        free(usr_par.bdf);              \
-    }                                   \
-    exit(-1);                                   \
-}while(0);                              \
+#define CLEAN_PACKAGE_DATA                        \
+    do                                            \
+    {                                             \
+        free(package);                            \
+        rdma_buffer_dereg(rdma_buff);             \
+        work_buffer_free(buff, usr_par.use_cuda); \
+        rdma_close_device(rdma_dev);              \
+        close(sockfd);                            \
+        if (usr_par.bdf)                          \
+        {                                         \
+            free(usr_par.bdf);                    \
+        }                                         \
+        exit(-1);                                 \
+    } while (0);
 
 static void usage(const char *argv0)
 {
@@ -232,43 +255,45 @@ static int parse_command_line(int argc, char *argv[], struct user_params *usr_pa
 {
     memset(usr_par, 0, sizeof *usr_par);
     /*Set defaults*/
-    usr_par->port       = 18515;
-    usr_par->size       = 4096;
-    usr_par->iters      = 1000;
-    usr_par->task       = 0;
+    usr_par->port = 18515;
+    usr_par->size = 4096;
+    usr_par->iters = 1000;
+    usr_par->task = 0;
 
-    while (1) {
+    while (1)
+    {
         int c;
 
         static struct option long_options[] = {
-            { .name = "task-flags",    .has_arg = 1, .val = 't' },
-            { .name = "addr",          .has_arg = 1, .val = 'a' },
-            { .name = "port",          .has_arg = 1, .val = 'p' },
-            { .name = "size",          .has_arg = 1, .val = 's' },
-            { .name = "iters",         .has_arg = 1, .val = 'n' },
-            { .name = "use-cuda",      .has_arg = 1, .val = 'u' },
-            { .name = "debug-mask",    .has_arg = 1, .val = 'D' },
-            { 0 }
-        };
+            {.name = "task-flags", .has_arg = 1, .val = 't'},
+            {.name = "addr", .has_arg = 1, .val = 'a'},
+            {.name = "port", .has_arg = 1, .val = 'p'},
+            {.name = "size", .has_arg = 1, .val = 's'},
+            {.name = "iters", .has_arg = 1, .val = 'n'},
+            {.name = "use-cuda", .has_arg = 1, .val = 'u'},
+            {.name = "debug-mask", .has_arg = 1, .val = 'D'},
+            {0}};
 
         c = getopt_long(argc, argv, "t:a:p:s:n:u:D:",
                         long_options, NULL);
         if (c == -1)
             break;
 
-        switch (c) {
-        
+        switch (c)
+        {
+
         case 't':
             usr_par->task = (strtol(optarg, NULL, 0) >> 0) & 1; /*bit 0*/
             break;
 
         case 'a':
-            get_addr(optarg, (struct sockaddr *) &usr_par->hostaddr);
+            get_addr(optarg, (struct sockaddr *)&usr_par->hostaddr);
             break;
 
         case 'p':
             usr_par->port = strtol(optarg, NULL, 0);
-            if (usr_par->port < 0 || usr_par->port > 65535) {
+            if (usr_par->port < 0 || usr_par->port > 65535)
+            {
                 usage(argv[0]);
                 return 1;
             }
@@ -285,16 +310,17 @@ static int parse_command_line(int argc, char *argv[], struct user_params *usr_pa
         case 'u':
             usr_par->use_cuda = 1;
             // usr_par->bdf = calloc(1, strlen(optarg)+1);
-            usr_par->bdf = (char *)malloc(strlen(optarg)+1);
-            if (!usr_par->bdf){
+            usr_par->bdf = (char *)malloc(strlen(optarg) + 1);
+            if (!usr_par->bdf)
+            {
                 fprintf(stderr, "FAILURE: BDF mem alloc failure (errno=%d '%m')", errno);
                 return 1;
             }
             strcpy(usr_par->bdf, optarg);
             break;
-        
+
         case 'D':
-            debug           = (strtol(optarg, NULL, 0) >> 0) & 1; /*bit 0*/
+            debug = (strtol(optarg, NULL, 0) >> 0) & 1;           /*bit 0*/
             debug_fast_path = (strtol(optarg, NULL, 0) >> 1) & 1; /*bit 1*/
             break;
 
@@ -304,21 +330,26 @@ static int parse_command_line(int argc, char *argv[], struct user_params *usr_pa
         }
     }
 
-    if (optind == argc) {
+    if (optind == argc)
+    {
         fprintf(stderr, "FAILURE: Server name is missing in the commant line.\n");
         usage(argv[0]);
         return 1;
-    } else if (optind == argc - 1) {
-        //usr_par->servername = strdupa(argv[optind]);
-        // usr_par->servername = calloc(1, strlen(argv[optind])+1);
-        usr_par->servername = (char *)malloc(strlen(argv[optind])+1);
-        if (!usr_par->servername){
+    }
+    else if (optind == argc - 1)
+    {
+        // usr_par->servername = strdupa(argv[optind]);
+        //  usr_par->servername = calloc(1, strlen(argv[optind])+1);
+        usr_par->servername = (char *)malloc(strlen(argv[optind]) + 1);
+        if (!usr_par->servername)
+        {
             fprintf(stderr, "FAILURE: servername mem alloc failure (errno=%d '%m')", errno);
             return 1;
         }
         strcpy(usr_par->servername, argv[optind]);
     }
-    else if (optind < argc) {
+    else if (optind < argc)
+    {
         usage(argv[0]);
         return 1;
     }
@@ -328,33 +359,37 @@ static int parse_command_line(int argc, char *argv[], struct user_params *usr_pa
 
 int main(int argc, char *argv[])
 {
-    struct rdma_device     *rdma_dev;
-    struct timeval          start;
-    int                     cnt;
-    struct user_params      usr_par;
-    int                     ret_val = 0;
-    int                     sockfd;
+    struct rdma_device *rdma_dev;
+    struct timeval start;
+    int cnt;
+    struct user_params usr_par;
+    int ret_val = 0;
+    int sockfd;
 
     srand48(getpid() * time(NULL));
 
     ret_val = parse_command_line(argc, argv, &usr_par);
-    if (ret_val) {
+    if (ret_val)
+    {
         ret_val = 1;
         /* We don't exit here, because when parse_command_line failed, probably
            some of memory allocations were completed, so we need to free them */
         // goto clean_usr_par;
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
     }
-    
-    if (!usr_par.hostaddr.sa_family) {
+
+    if (!usr_par.hostaddr.sa_family)
+    {
         fprintf(stderr, "FAILURE: host ip address is missing in the command line.");
         usage(argv[0]);
         ret_val = 1;
         // goto clean_usr_par;
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
@@ -364,10 +399,12 @@ int main(int argc, char *argv[])
     sockfd = open_client_socket(usr_par.servername, usr_par.port);
     free(usr_par.servername);
 
-    if (sockfd < 0) {
+    if (sockfd < 0)
+    {
         ret_val = 1;
         // goto clean_usr_par;
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
@@ -376,43 +413,49 @@ int main(int argc, char *argv[])
     printf("Opening rdma device\n");
     rdma_dev = rdma_open_device_client(&usr_par.hostaddr);
 
-    if (!rdma_dev) {
+    if (!rdma_dev)
+    {
         ret_val = 1;
         // goto clean_socket;
         printf("exit: clean_socket\n");
         close(sockfd);
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
     }
-    
+
     /* CPU or GPU memory buffer allocation */
-    void    *buff;
+    void *buff;
     buff = work_buffer_alloc(usr_par.size, usr_par.use_cuda, usr_par.bdf);
-    if (!buff) {
+    if (!buff)
+    {
         ret_val = 1;
         // goto clean_device;
         printf("exit: clean_device\n");
         rdma_close_device(rdma_dev);
         close(sockfd);
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
     }
 
     /* We don't need bdf any more, sio we can free this. */
-    if (usr_par.bdf) {
+    if (usr_par.bdf)
+    {
         free(usr_par.bdf);
         usr_par.bdf = NULL;
     }
-    
+
     /* RDMA buffer registration */
     struct rdma_buffer *rdma_buff;
 
     rdma_buff = rdma_buffer_reg(rdma_dev, buff, usr_par.size);
-    if (!rdma_buff) {
+    if (!rdma_buff)
+    {
         ret_val = 1;
         // goto clean_mem_buff;
         printf("exit: clean_mem_buff\n");
@@ -420,7 +463,8 @@ int main(int argc, char *argv[])
         work_buffer_free(buff, usr_par.use_cuda);
         rdma_close_device(rdma_dev);
         close(sockfd);
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
@@ -430,15 +474,17 @@ int main(int argc, char *argv[])
 
     int ret_desc_str_size = rdma_buffer_get_desc_str(rdma_buff, desc_str, sizeof(desc_str));
     int ret_task_opt_str_size = rdma_task_attr_flags_get_desc_str(usr_par.task, task_opt_str, sizeof(task_opt_str));
-     
-    if (!ret_desc_str_size || !ret_task_opt_str_size) {
+
+    if (!ret_desc_str_size || !ret_task_opt_str_size)
+    {
         ret_val = 1;
         // goto clean_rdma_buff;
         rdma_buffer_dereg(rdma_buff);
         work_buffer_free(buff, usr_par.use_cuda);
         rdma_close_device(rdma_dev);
         close(sockfd);
-        if (usr_par.bdf) {
+        if (usr_par.bdf)
+        {
             free(usr_par.bdf);
         }
         exit(-1);
@@ -450,24 +496,27 @@ int main(int argc, char *argv[])
     memset(package, 0, package_size);
 
     /* Packing RDMA buff desc str */
-    struct payload_attr pl_attr = { .data_t = RDMA_BUF_DESC, .payload_str = desc_str };
+    struct payload_attr pl_attr = {.data_t = RDMA_BUF_DESC, .payload_str = desc_str};
     int buff_package_size = pack_payload_data(package, package_size, &pl_attr);
-    if (!buff_package_size) {
+    if (!buff_package_size)
+    {
         ret_val = 1;
         CLEAN_PACKAGE_DATA
     }
-    
+
     /* Packing RDMA task attrs desc str */
     pl_attr.data_t = TASK_ATTRS;
     pl_attr.payload_str = task_opt_str;
     buff_package_size += pack_payload_data((char *)package + buff_package_size, package_size, &pl_attr);
-     if (!buff_package_size) {
+    if (!buff_package_size)
+    {
         ret_val = 1;
         CLEAN_PACKAGE_DATA
     }
-    
+
     printf("Starting data transfer (%d iters)\n", usr_par.iters);
-    if (gettimeofday(&start, NULL)) {
+    if (gettimeofday(&start, NULL))
+    {
         fprintf(stderr, "FAILURE: gettimeofday (errno=%d '%m')", errno);
         ret_val = 1;
         CLEAN_PACKAGE_DATA
@@ -476,23 +525,37 @@ int main(int argc, char *argv[])
     /****************************************************************************************************
      * The main loop where client and server send and receive "iters" number of messages
      */
-    for (cnt = 0; cnt < usr_par.iters; cnt++) {
+    int elements = usr_par.size / sizeof(int);
+    if (elements < PRINT_TOTAL_ELEMENTS)
+    {
+        printf("total elements= %d, but you want to print %d elements\n", elements, PRINT_TOTAL_ELEMENTS);
+        assert(false);
+    }
+    dim3 blockSize(256);
+    dim3 gridSize((elements + blockSize.x - 1) / blockSize.x);
+    modifyData<<<gridSize, blockSize>>>((int *)buff, PRINT_TOTAL_ELEMENTS, true);
+    printf("after receiving the data\n");
+
+    for (cnt = 0; cnt < usr_par.iters; cnt++)
+    {
 
         char ackmsg[sizeof ACK_MSG];
-        int  ret_size;
-        
+        int ret_size;
+
         // Sending RDMA data (address and rkey) by socket as a triger to start RDMA read/write operation
         DEBUG_LOG_FAST_PATH("Send message N %d: buffer desc \"%s\" of size %d with task opt \"%s\" of size %d\n", cnt, desc_str, strlen(desc_str), task_opt_str, strlen(task_opt_str));
         ret_size = write(sockfd, package, buff_package_size);
-        if (ret_size != buff_package_size) {
+        if (ret_size != buff_package_size)
+        {
             fprintf(stderr, "FAILURE: Couldn't send RDMA data for iteration, write data size %d (errno=%d '%m')\n", ret_size, errno);
             ret_val = 1;
             CLEAN_PACKAGE_DATA
         }
-        
+
         // Wating for confirmation message from the socket that rdma_read/write from the server has beed completed
         ret_size = recv(sockfd, ackmsg, sizeof ackmsg, MSG_WAITALL);
-        if (ret_size != sizeof ackmsg) {
+        if (ret_size != sizeof ackmsg)
+        {
             fprintf(stderr, "FAILURE: Couldn't read \"%s\" message, recv data size %d (errno=%d '%m')\n", ACK_MSG, ret_size, errno);
             ret_val = 1;
             CLEAN_PACKAGE_DATA
@@ -500,10 +563,11 @@ int main(int argc, char *argv[])
 
         // Printing received data for debug purpose
         DEBUG_LOG_FAST_PATH("Received ack N %d: \"%s\"\n", cnt, ackmsg);
-        if (!usr_par.use_cuda) {
-            DEBUG_LOG_FAST_PATH("Written data \"%s\"\n", (char*)buff);
+        if (!usr_par.use_cuda)
+        {
+            DEBUG_LOG_FAST_PATH("Written data \"%s\"\n", (char *)buff);
         }
-/*
+#if 0
         int* hostResult = (int*)malloc(usr_par.size);
         // Copy result from GPU to host
         hipMemcpy(hostResult, buff, usr_par.size, hipMemcpyDeviceToHost);
@@ -514,26 +578,17 @@ int main(int argc, char *argv[])
         }
             printf("\n");
 
-*/
-            // Launch the kernel
-        int elements = usr_par.size/sizeof(int);
-        if(elements < PRINT_TOTAL_ELEMENTS){
-            printf("total elements= %d, but you want to print %d elements\n", elements, PRINT_TOTAL_ELEMENTS);
-            assert(false);
-        }
-        dim3 blockSize(256);
-        dim3 gridSize((elements + blockSize.x - 1) / blockSize.x);
-    // // addArrays<<<gridSize, blockSize>>>(deviceResult, deviceA, deviceB, dataSize);
-        modifyData<<<gridSize, blockSize>>>((int *)buff, PRINT_TOTAL_ELEMENTS);  
-        hipKernel<<<1, 1>>>();
+#else
+        // Launch the kernel
+        modifyData<<<gridSize, blockSize>>>((int *)buff, PRINT_TOTAL_ELEMENTS, false);
         hipDeviceSynchronize(); // Wait for the kernel to finish
-        // print_result(buff);
-       
+#endif
     }
     /****************************************************************************************************/
 
     ret_val = print_run_time(start, usr_par.size, usr_par.iters);
-    if (ret_val) {
+    if (ret_val)
+    {
         CLEAN_PACKAGE_DATA
     }
 
@@ -545,7 +600,7 @@ clean_rdma_buff:
 
 clean_mem_buff:
     work_buffer_free(buff, usr_par.use_cuda);
- 
+
 clean_device:
     rdma_close_device(rdma_dev);
 
@@ -553,7 +608,8 @@ clean_socket:
     close(sockfd);
 
 clean_usr_par:
-    if (usr_par.bdf) {
+    if (usr_par.bdf)
+    {
         free(usr_par.bdf);
     }
 
