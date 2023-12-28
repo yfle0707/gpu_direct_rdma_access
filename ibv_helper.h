@@ -151,7 +151,7 @@ static int ibv_query_gid_type(struct ibv_context *context, uint8_t port_num,
 int ibv_find_sgid_type(struct ibv_context *context, uint8_t port_num,
 		enum ibv_gid_type gid_type, int gid_family)
 {
-        enum ibv_gid_type sgid_type = 0;
+        enum ibv_gid_type sgid_type = static_cast<enum ibv_gid_type>(0);
         union ibv_gid sgid;
         int sgid_family = -1;
         int idx = 0;

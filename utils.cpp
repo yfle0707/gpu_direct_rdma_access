@@ -30,30 +30,58 @@
  * SOFTWARE.
  */
 
-#ifndef _GPU_MEM_UTIL_H_
-#define _GPU_MEM_UTIL_H_
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <time.h>
+#include <netdb.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/time.h>
 
-// #ifdef __cplusplus
-// extern "C" {
-// #endif
+#include "utils.h"
 
-#include <hip/hip_runtime.h>
-/*
- * Memory allocation on CPU or GPU according to HAVE_CUDA pre-compile option and use_cuda flag
- *
- * returns: a pointer to the allocated buffer or NULL on error
- */
-void *work_buffer_alloc(size_t length, int use_cuda, const char *bdf);
+int get_addr(char *dst, struct sockaddr *addr)
+{
+        struct addrinfo *res;
+        int ret;
 
-/*
- * CPU or GPU memory free, according to HAVE_CUDA pre-compile option and use_cuda flag
- */
-void work_buffer_free(void *buff, int use_cuda);
+        ret = getaddrinfo(dst, NULL, NULL, &res);
+        if (ret) {
+                printf("getaddrinfo failed (%s) - invalid hostname or IP address\n", gai_strerror(ret));
+                return ret;
+        }
 
-void print_result(void *buff);
+        if (res->ai_family == PF_INET)
+                memcpy(addr, res->ai_addr, sizeof(struct sockaddr_in));
+        else if (res->ai_family == PF_INET6)
+                memcpy(addr, res->ai_addr, sizeof(struct sockaddr_in6));
+        else
+                ret = -1;
 
-// #ifdef __cplusplus
-// }
-// #endif
+        freeaddrinfo(res);
+        return ret;
+}
 
-#endif /* _GPU_MEM_UTIL_H_ */
+int print_run_time(struct timeval start, unsigned long size, int iters)
+{
+    struct timeval  end;
+    float           usec;
+    long long       bytes;
+
+    if (gettimeofday(&end, NULL)) {
+        perror("gettimeofday");
+        return 1;
+    }
+
+    usec  = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
+    bytes = (long long) size * iters;
+
+    printf("%lld bytes in %.2f seconds = %.2f Mbit/sec\n",
+           bytes, usec / 1000000., bytes * 8. / usec);
+    printf("%d iters in %.2f seconds = %.2f usec/iter\n",
+           iters, usec / 1000000., usec / iters);
+    return 0;
+
+}
+

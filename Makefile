@@ -14,8 +14,8 @@ ifeq ($(USE_CUDA),1)
   PRE_CFLAGS1 = -I$(IDIR) $(CUDAFLAGS) -g -DHAVE_CUDA
   LIBS = -Wall -lrdmacm -libverbs -lmlx5 -lcuda
 else
-
-  PRE_CFLAGS1 = -I$(IDIR) $(HIPFLAGS) -g -D__HIP_PLATFORM_AMD__
+  HIPFLAGS = -I/opt/rocm/include/
+  PRE_CFLAGS1 = -I$(IDIR) $(HIPFLAGS) -g -O3 -D__HIP_PLATFORM_AMD__
   LIBS = -Wall -lrdmacm -libverbs -lmlx5
 endif
 
@@ -38,10 +38,10 @@ OBJS = gpu_direct_rdma_access.o
 OBJS += gpu_mem_util.o
 OBJS += utils.o
 
-$(ODIR)/%.o: %.c $(DEPS)
+$(ODIR)/%.o: %.cpp $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-all : make_odir $(OEXE_CLT) $(OEXE_SRV)
+all : make_odir $(OEXE_CLT) $(OEXE_SRV) add
 
 make_odir: $(ODIR)/
 
@@ -50,6 +50,10 @@ $(OEXE_SRV) : $(patsubst %,$(ODIR)/%,$(OBJS)) $(ODIR)/server.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(OEXE_CLT) : $(patsubst %,$(ODIR)/%,$(OBJS)) $(ODIR)/client.o
+	@echo $(CC)
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+add: add.cpp
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(ODIR)/:
@@ -58,5 +62,5 @@ $(ODIR)/:
 .PHONY: clean
 
 clean :
-	rm -f $(OEXE_CLT) $(OEXE_SRV) $(ODIR)/*.o *~ core.* $(IDIR)/*~
+	rm -f add $(OEXE_CLT) $(OEXE_SRV) $(ODIR)/*.o *~ core.* $(IDIR)/*~
 

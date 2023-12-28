@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 #define MAX_SEND_SGE    10
-
+#define PRINT_TOTAL_ELEMENTS  20
 /*
  * rdma_device object holds the RDMA resources of the local RDMA device,
  * of a Targte or a Source
