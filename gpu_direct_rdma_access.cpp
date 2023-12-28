@@ -995,7 +995,7 @@ int rdma_exec_task(struct rdma_exec_params *exec_params)
 
                 for(int k=0; k<PRINT_TOTAL_ELEMENTS; k++){
                     int *temp = (int *)exec_params->local_buf_addr;
-                    temp[k] = k;
+                    temp[k] = k*2;
                     printf("%d ", temp[k]);
                 }
                 printf("\n");

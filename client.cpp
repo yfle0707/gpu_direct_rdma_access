@@ -517,7 +517,7 @@ int main(int argc, char *argv[])
 */
             // Launch the kernel
         int elements = usr_par.size/sizeof(int);
-        if(elements > PRINT_TOTAL_ELEMENTS){
+        if(elements < PRINT_TOTAL_ELEMENTS){
             printf("total elements= %d, but you want to print %d elements\n", elements, PRINT_TOTAL_ELEMENTS);
             assert(false);
         }
