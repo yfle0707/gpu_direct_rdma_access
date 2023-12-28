@@ -948,7 +948,7 @@ int rdma_exec_task(struct rdma_exec_params *exec_params)
 				curr_rem_addr += sg_list[i].length;
                 for(int k=0; k<10; k++){
                     int *temp = (int *)sg_list[i].addr;
-                    printf("%d ", temp[i]);
+                    printf("%d ", temp[k]);
                 }
                 printf("length %d \n", sg_list[i].length);
 			}
@@ -971,6 +971,11 @@ int rdma_exec_task(struct rdma_exec_params *exec_params)
 				exec_params->flags & RDMA_TASK_ATTR_RDMA_READ ? "read" : "write",
 				(long long unsigned int)exec_params->wr_id, exec_params->device->qpex, exec_params->rem_buf_rkey, (unsigned long long)exec_params->rem_buf_addr);
 
+                for(int k=0; k<10; k++){
+                    int *temp = (int *)exec_params->local_buf_addr;
+                    printf("%d ", temp[k]);
+                }
+                printf("\n");
 		ibv_wr_rdma_rw_post(exec_params->device->qpex, exec_params->rem_buf_rkey, exec_params->rem_buf_addr);
 		
 		DEBUG_LOG_FAST_PATH("RDMA Read/Write: ibv_wr_set_sge: qpex=%p, lkey=0x%x, local_buf=0x%llx, size=%u\n",
